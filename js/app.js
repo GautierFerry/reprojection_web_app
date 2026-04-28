@@ -43,6 +43,7 @@ const els = {
   exportCsv: byId('exportCsv'),
   exportXlsx: byId('exportXlsx'),
   baseName: byId('baseName'),
+  previewLoader: byId('previewLoader'),
 };
 
 const theme = { value: 'dark' };
@@ -110,14 +111,56 @@ function normalizeNumber(value) {
 }
 
 function guessField(headers, mode) {
-  const patterns = mode === 'x'
-    ? [/^x$/i, /lon/i, /long/i, /easting/i, /^est$/i]
-    : [/^y$/i, /lat/i, /north/i, /northing/i];
-  for (const h of headers) {
-    if (patterns.some((p) => p.test(h))) return { name: h, score: 0.95 };
+  // 1. Fonction utilitaire pour enlever les accents et mettre en minuscules
+  const normalize = (str) => {
+    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  };
+
+  // 2. Définition des règles avec un score associé (du plus précis au plus large)
+  const rules = mode === 'x' ? [
+    { regex: /^(x|lon|longitude|lng|est|easting)$/, score: 1.0 },       
+    { regex: /^(_x|x_|-x|x-)|(_x$|-x$)/, score: 0.9 },                   
+    { regex: /\b(lon|longitude|lng|easting)\b/, score: 0.8 },            
+    { regex: /x/i, score: 0.4 },                                         
+  ] : [
+    { regex: /^(y|lat|latitude|nord|northing)$/, score: 1.0 },
+    { regex: /^(_y|y_|-y|y-)|(_y$|-y$)/, score: 0.9 },
+    { regex: /\b(lat|latitude|northing)\b/, score: 0.8 },
+    { regex: /y/i, score: 0.4 },
+  ];
+
+  let bestMatch = null;
+  let highestScore = -1;
+
+  // 3. On teste chaque en-tête
+  for (const header of headers) {
+    const normalizedHeader = normalize(header);
+
+    for (const rule of rules) {
+      if (rule.regex.test(normalizedHeader)) {
+        // On pénalise légèrement les noms de colonnes très longs pour éviter les faux positifs
+        // ex: on préfère "X" (score 1.0) à "Coordonnee_X_du_batiment" (score 0.9 - pénalité)
+        const lengthPenalty = normalizedHeader.length > 15 ? 0.05 : 0;
+        const finalScore = rule.score - lengthPenalty;
+
+        if (finalScore > highestScore) {
+          highestScore = finalScore;
+          bestMatch = { name: header, score: finalScore };
+        }
+        break; // On a trouvé la meilleure règle pour cette colonne, on passe à la suivante
+      }
+    }
   }
-  return headers[mode === 'x' ? 0 : 1]
-    ? { name: headers[mode === 'x' ? 0 : 1], score: 0.35 }
+
+  // 4. Si on a trouvé un match acceptable (score > 0.5 pour éviter les faux positifs ridicules)
+  if (bestMatch && bestMatch.score >= 0.5) {
+    return bestMatch;
+  }
+
+  // 5. Fallback par défaut si rien n'est trouvé
+  const defaultIndex = mode === 'x' ? 0 : 1;
+  return headers[defaultIndex] 
+    ? { name: headers[defaultIndex], score: 0.35 } 
     : null;
 }
 
@@ -139,7 +182,9 @@ function parseWorkbook(fileName, workbook) {
 
 function setLoading(isLoading) {
   if (!els.guessInfo) return;
+  
   if (isLoading) {
+    // Affiche le petit texte en haut à droite
     els.guessInfo.innerHTML = `
       <span class="loader">
         <span class="loader-dot"></span>
@@ -148,8 +193,20 @@ function setLoading(isLoading) {
         <span>Analyse du fichier en cours…</span>
       </span>
     `;
+    
+    // On vide le tableau précédent
+    els.thead.innerHTML = '';
+    els.tbody.innerHTML = '';
+    
+    // On affiche la roue crantée centrale
+    if(els.previewLoader) els.previewLoader.style.display = 'flex';
+    
   } else {
+    // Fin du chargement
     els.guessInfo.textContent = 'Pas encore d’analyse.';
+    
+    // On cache la roue crantée
+    if(els.previewLoader) els.previewLoader.style.display = 'none';
   }
 }
 

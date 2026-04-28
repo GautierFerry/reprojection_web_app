@@ -170,10 +170,12 @@ label{
     gap:var(--space-4)
 }
 
-.panel{background:var(--color-surface);
-    border:1px solid color-mix(in oklab,var(--color-text) 10%,transparent);
-    border-radius:var(--radius-xl);
-    box-shadow:var(--shadow-sm)
+.panel {
+    background: var(--color-surface);
+    border: 1px solid color-mix(in oklab,var(--color-text) 10%,transparent);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-sm);
+    min-width: 0; 
 }
 
 .panel.pad{
@@ -442,6 +444,35 @@ code{
 
 .loader-dot:nth-child(2){ animation-delay: .15s; }
 .loader-dot:nth-child(3){ animation-delay: .3s; }
+/* --- Animation de chargement (Roue crantée) --- */
+.preview-loader {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-10);
+    color: var(--color-text-muted);
+    gap: var(--space-3);
+    min-height: 150px;
+}
+
+/* --- Le nouveau Spinner moderne --- */
+.spinner {
+    width: 48px;
+    height: 48px;
+    /* L'anneau de fond (gris clair/foncé selon le thème) */
+    border: 5px solid var(--color-divider);
+    /* L'arc animé (couleur principale du thème) */
+    border-top: 5px solid var(--color-primary);
+    border-radius: 50%;
+    /* L'animation est plus rapide et fluide (1s au lieu de 2s) */
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
 
 @keyframes loader-bounce{
   from{

@@ -31,7 +31,6 @@
         <div class="hero-copy stack">
           <h1>Reprojection Web</h1>
           <div class="muted">
-            Cette version fonctionne dans un navigateur statique, y compris sur GitHub Pages.
             Les traitements sont réalisés côté client, sans backend.
           </div>
         </div>
@@ -123,6 +122,10 @@
           <div class="footer-note" id="guessInfo">Pas encore d’analyse.</div>
         </div>
         <div class="preview">
+          <div id="previewLoader" class="preview-loader" style="display: none;">
+            <span class="spinner"></span>
+            <span>Analyse et chargement du fichier...</span>
+          </div>
           <table>
             <thead id="thead"></thead>
             <tbody id="tbody"></tbody>
