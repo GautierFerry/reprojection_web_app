@@ -84,10 +84,12 @@ function escapeHtml(value) {
 }
 
 function detectDelimiter(text) {
-  const sample = text.split(/\r?\n/).slice(0, 5).join('\n');
+  // On ne prend que les 2000 premiers caractères pour économiser la RAM
+  const sample = text.slice(0, 2000).split(/\r?\n/).slice(0, 5).join('\n');
   const candidates = [';', ',', '\t'];
   let best = ';';
   let bestScore = -1;
+  
   for (const d of candidates) {
     const score = sample.split(d).length;
     if (score > bestScore) {
@@ -175,9 +177,15 @@ function setFieldSelects(headers, guessedX, guessedY) {
 
 function parseWorkbook(fileName, workbook) {
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: '' });
+  // On retire le dangereux { defval: '' } et on ignore les lignes vides
+  const rows = XLSX.utils.sheet_to_json(firstSheet, { blankrows: false });
   const headers = rows.length ? Object.keys(rows[0]) : [];
-  return { fileName, rows, headers, format: fileName.toLowerCase().endsWith('.csv') ? 'CSV' : 'Excel' };
+  return { 
+    fileName, 
+    rows, 
+    headers, 
+    format: fileName.toLowerCase().endsWith('.csv') ? 'CSV' : 'Excel' 
+  };
 }
 
 function setLoading(isLoading) {
