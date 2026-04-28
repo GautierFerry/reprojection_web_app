@@ -137,8 +137,26 @@ function parseWorkbook(fileName, workbook) {
   return { fileName, rows, headers, format: fileName.toLowerCase().endsWith('.csv') ? 'CSV' : 'Excel' };
 }
 
+function setLoading(isLoading) {
+  if (!els.guessInfo) return;
+  if (isLoading) {
+    els.guessInfo.innerHTML = `
+      <span class="loader">
+        <span class="loader-dot"></span>
+        <span class="loader-dot"></span>
+        <span class="loader-dot"></span>
+        <span>Analyse du fichier en cours…</span>
+      </span>
+    `;
+  } else {
+    els.guessInfo.textContent = 'Pas encore d’analyse.';
+  }
+}
+
 async function inspectFile(file) {
   try {
+    setLoading(true);
+
     let parsed;
     if (file.name.toLowerCase().endsWith('.csv')) {
       const text = await file.text();
@@ -152,6 +170,7 @@ async function inspectFile(file) {
       parsed = parseWorkbook(file.name, workbook);
       parsed.delimiter = 'Excel';
     }
+
 
     state.fileName = parsed.fileName;
     state.rows = parsed.rows;
@@ -176,6 +195,8 @@ async function inspectFile(file) {
     toast('Fichier analysé avec succès.', 'warn');
   } catch (e) {
     toast(`Erreur d'analyse : ${String(e)}`, 'error');
+  } finally {
+    setLoading(false);
   }
 }
 

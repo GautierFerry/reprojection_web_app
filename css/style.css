@@ -110,7 +110,7 @@ label{
 
 .app{
     display:grid;
-    grid-template-columns:320px 1fr;
+    grid-template-columns:320px minmax(0, 1fr);
     min-height:100vh
 }
 
@@ -184,7 +184,8 @@ label{
     padding:var(--space-8);
     display:grid;
     grid-template-rows:auto auto 1fr;
-    gap:var(--space-6)
+    gap:var(--space-6); 
+    min-width: 0;
 }
 
 .hero{
@@ -327,16 +328,18 @@ input[type="text"]{
 }
 
 .preview{
-    overflow:auto;
-    border-radius:var(--radius-lg);
-    border:1px solid var(--color-divider)
+  max-height: 260px;
+  overflow-y: auto;           
+  overflow-x: auto;           
+  border-radius:var(--radius-lg);
+  border:1px solid var(--color-divider);
 }
 
 th,td{
-    padding:.8rem 1rem;
-    border-bottom:1px solid var(--color-divider);
-    text-align:left;
-    white-space:nowrap
+  padding:.4rem .6rem;
+  border-bottom:1px solid var(--color-divider);
+  text-align:left;
+  white-space:nowrap;
 }
 
 thead{
@@ -419,3 +422,34 @@ thead{
 code{
     font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace
 } 
+
+.loader{
+  display:inline-flex;
+  align-items:center;
+  gap:var(--space-2);
+  font-size:var(--text-sm);
+  color:var(--color-text-muted);
+}
+
+.loader-dot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background:var(--color-primary);
+  opacity:.25;
+  animation: loader-bounce 0.9s infinite alternate;
+}
+
+.loader-dot:nth-child(2){ animation-delay: .15s; }
+.loader-dot:nth-child(3){ animation-delay: .3s; }
+
+@keyframes loader-bounce{
+  from{
+    transform:translateY(0);
+    opacity:.25;
+  }
+  to{
+    transform:translateY(-4px);
+    opacity:1;
+  }
+}
