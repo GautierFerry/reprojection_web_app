@@ -296,4 +296,3 @@ els.runBtn?.addEventListener('click', () => {
 fillSelect(els.epsgIn, EPSG_OPTIONS, 'EPSG:4326');
 fillSelect(els.epsgOut, EPSG_OPTIONS, 'EPSG:2154');
 
-loadEpsg();
