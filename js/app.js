@@ -249,22 +249,27 @@ els.fileInput?.addEventListener('change', (e) => {
   if (file) inspectFile(file);
 });
 
-['dragenter', 'dragover'].forEach((evt) =>
-  els.dropzone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    els.dropzone.style.transform = 'scale(1.01)';
-  }),
-);
-['dragleave', 'drop'].forEach((evt) =>
-  els.dropzone.addEventListener(evt, (e) => {
-    e.preventDefault();
-    els.dropzone.style.transform = 'scale(1)';
-  }),
-);
-els.dropzone.addEventListener('drop', (e) => {
-  const file = e.dataTransfer?.files?.[0];
-  if (file) inspectFile(file);
-});
+// Drag & drop sécurisé
+if (els.dropzone) {
+  ['dragenter', 'dragover'].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.style.transform = 'scale(1.01)';
+    }),
+  );
+
+  ['dragleave', 'drop'].forEach((evt) =>
+    els.dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      els.dropzone.style.transform = 'scale(1)';
+    }),
+  );
+
+  els.dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer?.files?.[0];
+    if (file) inspectFile(file);
+  });
+}
 
 els.runBtn?.addEventListener('click', () => {
   if (!state.rows.length) return toast('Importez un fichier avant de lancer la reprojection.', 'error');
@@ -273,7 +278,9 @@ els.runBtn?.addEventListener('click', () => {
   try {
     const { outRows, rejected } = transformRows();
     const files = exportFiles(outRows);
-    const warnings = rejected.length ? `<div class="alert warn">${rejected.length} ligne(s) ignorée(s) car les coordonnées étaient invalides.</div>` : '';
+    const warnings = rejected.length
+      ? `<div class="alert warn">${rejected.length} ligne(s) ignorée(s) car les coordonnées étaient invalides.</div>`
+      : '';
     els.result.innerHTML = `
       <div class="stack downloads">
         <div class="alert warn">

@@ -1,73 +1,70 @@
 <!DOCTYPE html>
-<html lang="fr" data-theme="dark">
+<html lang="fr" data-theme="ligth">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reproj Moderne</title>
+  <title>Reprojection Web</title>
+
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@500,700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css">
+
+  <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
         <div class="logo" aria-hidden="true"></div>
-        <div>
-          <h2>Reprojection</h2>
-        </div>
+        <div><h2>Reprojection Web</h2></div>
       </div>
 
-      <div>
-        <h3>Étapes</h3>
-      </div>
-      <div class="panel pad stack">
-        <div class="muted">1. Importer un fichier CSV ou Excel contenant des coordonnées géographiques (colonnes X/Y).</div>
-      </div>
-      <div class="panel pad stack">
-        <div class="muted">2. Vérifier que les champs X et Y ont été correctement détectés (sinon les sélectionner manuellement).</div>
-      </div>
-      <div class="panel pad stack">
-        <div class="muted">3. Choisir les systèmes de coordonnées source et cible (EPSG) pour la reprojection.</div>
-      </div>
-      <div class="panel pad stack">
-        <div class="muted">4. Lancer la reprojection et exporter les données transformées au format CSV et/ou Excel dans le dossier de votre choix.</div>
-      </div>
+      <div><h3>Étapes</h3></div>
+      <div class="panel pad stack"><div class="muted">1. Importer un fichier CSV ou Excel contenant des coordonnées X/Y.</div></div>
+      <div class="panel pad stack"><div class="muted">2. Vérifier les champs détectés, choisir les EPSG source et cible.</div></div>
+      <div class="panel pad stack"><div class="muted">3. Lancer la transformation directement dans le navigateur.</div></div>
+      <div class="panel pad stack"><div class="muted">4. Télécharger les résultats au format CSV et/ou Excel.</div></div>
     </aside>
 
     <main class="main">
-    <section class="hero">
-      <div class="hero-copy stack">
-        <h1>Reprojection Web</h1>
-        <div class="muted">
-          Les traitements sont réalisés côté client, sans backend.
+      <!-- HERO : thème + bouton fichier -->
+      <section class="hero">
+        <div class="hero-copy stack">
+          <h1>Reprojection Web</h1>
+          <div class="muted">
+            Cette version fonctionne dans un navigateur statique, y compris sur GitHub Pages.
+            Les traitements sont réalisés côté client, sans backend.
+          </div>
         </div>
-      </div>
-      <div class="toolbar">
-        <button class="btn btn-secondary" id="themeToggle">Thème</button>
-        <button class="btn btn-primary" id="pickFileBtn">Choisir un fichier</button>
-        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
-      </div>
-    </section>
+        <div class="toolbar">
+          <button class="btn btn-secondary" id="themeToggle">Thème</button>
+          <button class="btn btn-primary" id="pickFileBtn">Choisir un fichier</button>
+          <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+        </div>
+      </section>
 
+      <!-- GRID : dropzone à gauche, options à droite -->
       <section class="grid">
+        <!-- Colonne gauche : dropzone, KPI, warnings -->
         <div class="panel pad stack">
           <div class="dropzone" id="dropzone">
             <div class="pill">CSV, XLSX, XLS</div>
             <h2>Déposez un fichier ici</h2>
-            <div class="muted">Ou utilisez le bouton pour analyser le fichier et détecter automatiquement les champs reprojetables.</div>
+            <div class="muted">
+              Ou utilisez le bouton pour analyser le fichier et détecter automatiquement les champs reprojetables.
+            </div>
             <div id="currentFile" class="footer-note">Aucun fichier chargé.</div>
           </div>
 
           <div class="status">
             <div class="kpi"><span class="muted">Colonnes</span><strong id="kpiCols">0</strong></div>
             <div class="kpi"><span class="muted">Aperçu</span><strong id="kpiRows">0</strong></div>
-            <div class="kpi"><span class="muted">Séparateur</span><strong id="kpiDelim">-</strong></div>
+            <div class="kpi"><span class="muted">Format</span><strong id="kpiDelim">-</strong></div>
           </div>
 
           <div id="warnings" class="stack"></div>
         </div>
 
+        <!-- Colonne droite : X/Y, EPSG, options -->
         <div class="panel pad stack">
           <div class="form-grid">
             <div>
@@ -89,17 +86,23 @@
           </div>
 
           <div class="checks">
-            <label class="check"><input type="checkbox" id="joinXY">Créer la colonne ND_Geom (coordonnées X/Y regroupées)</label>
-            <label class="check"><input type="checkbox" id="exportCsv" checked> Export CSV</label>
-            <label class="check"><input type="checkbox" id="exportXlsx"> Export Excel (.xlsx)</label>
+            <label class="check">
+              <input type="checkbox" id="joinXY">
+              Créer la colonne ND_Geom (coordonnées X/Y regroupées)
+            </label>
+            <label class="check">
+              <input type="checkbox" id="exportCsv" checked>
+              Export CSV
+            </label>
+            <label class="check">
+              <input type="checkbox" id="exportXlsx" checked>
+              Export Excel (.xlsx)
+            </label>
           </div>
 
           <div>
-            <label for="outputFolder">Dossier de sortie</label>
-            <div class="toolbar">
-              <input type="text" id="outputFolder" placeholder="Choisissez un dossier de sortie" />
-              <button class="btn btn-secondary" id="pickFolderBtn">Choisir le dossier</button>
-            </div>
+            <label for="baseName">Nom de base des exports</label>
+            <input type="text" id="baseName" placeholder="reprojection_resultat" />
           </div>
 
           <div class="toolbar">
@@ -110,6 +113,7 @@
         </div>
       </section>
 
+      <!-- Aperçu -->
       <section class="panel pad stack">
         <div class="meta">
           <div>
@@ -127,13 +131,12 @@
       </section>
     </main>
   </div>
-  <!-- SheetJS pour lire CSV / Excel -->
+
+  <!-- SheetJS -->
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-
-  <!-- proj4js pour la reprojection -->
+  <!-- proj4js -->
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.min.js"></script>
-
-  <!-- Ton script applicatif -->
-  <script type="module" src="js/app.js"></script>
+  <!-- App -->
+  <script type="module" src="./js/app.js"></script>
 </body>
 </html>
