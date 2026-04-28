@@ -218,29 +218,78 @@ function setLoading(isLoading) {
   }
 }
 
+function parseLargeCSV(file) {
+  return new Promise((resolve, reject) => {
+    let headers = [];
+    let preview = [];
+    let allRows = [];
+    let rowCount = 0;
+
+    Papa.parse(file, {
+      header: true,          // Transforme chaque ligne en objet
+      skipEmptyLines: true,
+      worker: true,          // MAGIQUE : Fait le travail en arrière-plan (ne fige pas la page)
+      step: function(results) {
+        // Cette fonction est appelée pour chaque ligne (ou bloc de lignes)
+        if (rowCount === 0) {
+          headers = results.meta.fields;
+        }
+        if (rowCount < 20) {
+          preview.push(results.data);
+        }
+        // On stocke la ligne
+        allRows.push(results.data);
+        rowCount++;
+      },
+      complete: function(results) {
+        resolve({
+          fileName: file.name,
+          rows: allRows,
+          headers: headers,
+          preview: preview,
+          format: 'CSV',
+          delimiter: results.meta.delimiter || 'Auto'
+        });
+      },
+      error: function(err) {
+        reject(err);
+      }
+    });
+  });
+}
+
 async function inspectFile(file) {
   try {
     setLoading(true);
 
     let parsed;
+    // Si c'est un CSV, on utilise la lecture optimisée
     if (file.name.toLowerCase().endsWith('.csv')) {
-      const text = await file.text();
-      const delimiter = detectDelimiter(text);
-      const workbook = XLSX.read(text, { type: 'string', FS: delimiter });
-      parsed = parseWorkbook(file.name, workbook);
-      parsed.delimiter = delimiter === '\t' ? 'Tabulation' : delimiter;
-    } else {
+      parsed = await parseLargeCSV(file);
+    } 
+    // Si c'est un Excel, on garde SheetJS
+    else {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      parsed = parseWorkbook(file.name, workbook);
-      parsed.delimiter = 'Excel';
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(firstSheet, { blankrows: false });
+      parsed = {
+        fileName: file.name,
+        rows: rows,
+        headers: rows.length ? Object.keys(rows[0]) : [],
+        format: 'Excel',
+        delimiter: 'N/A'
+      };
+      parsed.preview = parsed.rows.slice(0, 20);
     }
 
-
+    // Le reste du code ne change pas...
     state.fileName = parsed.fileName;
-    state.rows = parsed.rows;
+    state.rows = parsed.rows;          // <-- On stocke TOUTES les lignes ici
     state.headers = parsed.headers;
-    state.preview = parsed.rows.slice(0, 20);
+    
+    // On génère le preview seulement si la fonction de parsing ne l'a pas déjà fait
+    state.preview = parsed.preview || parsed.rows.slice(0, 20);
 
     const guessedX = guessField(parsed.headers, 'x');
     const guessedY = guessField(parsed.headers, 'y');
@@ -251,13 +300,13 @@ async function inspectFile(file) {
     els.currentFile.textContent = parsed.fileName;
     els.baseName.value = parsed.fileName.replace(/\.[^.]+$/, '') + '_reproj';
     els.kpiCols.textContent = parsed.headers.length;
-    els.kpiRows.textContent = state.preview.length;
+    els.kpiRows.textContent = state.rows.length; // Afficher le total de lignes est plus pertinent !
     els.kpiDelim.textContent = parsed.delimiter;
 
     renderWarnings(warnings);
     renderTable(parsed.headers, state.preview);
     setFieldSelects(parsed.headers, guessedX, guessedY);
-    toast('Fichier analysé avec succès.', 'warn');
+    toast('Fichier analysé avec succès.', 'success'); // Mis en success plutôt que warn
   } catch (e) {
     toast(`Erreur d'analyse : ${String(e)}`, 'error');
   } finally {
