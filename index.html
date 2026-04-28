@@ -36,13 +36,19 @@
     </aside>
 
     <main class="main">
-      <section class="hero">
-        <div class="toolbar">
-          <button class="btn btn-secondary" id="themeToggle">Thème</button>
-          <button class="btn btn-primary" id="pickFileBtn">Choisir un fichier</button>
-          <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+    <section class="hero">
+      <div class="hero-copy stack">
+        <h1>Reprojection Web</h1>
+        <div class="muted">
+          Les traitements sont réalisés côté client, sans backend.
         </div>
-      </section>
+      </div>
+      <div class="toolbar">
+        <button class="btn btn-secondary" id="themeToggle">Thème</button>
+        <button class="btn btn-primary" id="pickFileBtn">Choisir un fichier</button>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
+      </div>
+    </section>
 
       <section class="grid">
         <div class="panel pad stack">
@@ -121,6 +127,13 @@
       </section>
     </main>
   </div>
+  <!-- SheetJS pour lire CSV / Excel -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+
+  <!-- proj4js pour la reprojection -->
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.min.js"></script>
+
+  <!-- Ton script applicatif -->
   <script type="module" src="js/app.js"></script>
-</body></html>
+</body>
+</html>
