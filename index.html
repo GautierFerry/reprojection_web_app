@@ -9,14 +9,15 @@
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@500,700&display=swap" rel="stylesheet">
 
   <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <div class="app">
     <main class="main">
       <!-- HERO : thème + bouton fichier -->
       <section class="hero">
-        <div class="hero-copy stack">
-          <h1>RIProjection de coordonnées géographiques</h1>
+        <div class="hero-copy">
+          <h1><span class="text-primary">RIP</span>rojection</h1>
           <div class="muted">
             La reprojection de coordonnées géographiques directement dans votre navigateur.
           </div>
@@ -96,29 +97,35 @@
       </section>
 
       <!-- Aperçu -->
-      <section class="panel pad stack">
+      <section class="stack">
         <div class="meta">
           <div>
             <h3>Aperçu des données</h3>
             <div class="muted">Les 20 premières lignes sont affichées pour validation avant traitement.</div>
           </div>
-          <div class="footer-note" id="guessInfo">Pas encore d’analyse.</div>
+          <div class="footer-note" id="guessInfo"></div>
         </div>
-        <div class="preview">
-          <div id="previewLoader" class="preview-loader" style="display: none;">
-            <span class="spinner"></span>
-            <span>Analyse et chargement du fichier...</span>
+        <div class="preview-container">
+          <div class="preview">
+            <div id="previewLoader" class="preview-loader" style="display: none;">
+              <div class="spinner"></div>
+              <span>Analyse et chargement du fichier...</span>
+            </div>
+            <table>
+              <thead id="thead"></thead>
+              <tbody id="tbody"></tbody>
+            </table>
           </div>
-          <table>
-            <thead id="thead"></thead>
-            <tbody id="tbody"></tbody>
-          </table>
+          
+          <div id="mapContainer" class="map-container">
+            <div id="leafletMap" style="width: 100%; height: 100%;"></div>
+          </div>
         </div>
       </section>
     </main>
   </div>
 
-  <!-- SheetJS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
   <!-- proj4js -->
   <script src="https://cdn.jsdelivr.net/npm/proj4@2.12.1/dist/proj4.min.js"></script>

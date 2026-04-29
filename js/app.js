@@ -6,6 +6,9 @@ const state = {
   preview: [],
 };
 
+let map = null;
+let mapMarkers = [];
+
 const EPSG_OPTIONS = [
   { code: 'EPSG:4326', label: 'EPSG:4326 — WGS 84 (lon/lat)' },
   { code: 'EPSG:3857', label: 'EPSG:3857 — Web Mercator' },
@@ -165,7 +168,7 @@ function setFieldSelects(headers, guessedX, guessedY) {
   fillSelect(els.yField, options, guessedY?.name || headers[1] || headers[0]);
   const xText = guessedX ? `${guessedX.name} (${guessedX.score.toFixed(2)})` : 'non détecté';
   const yText = guessedY ? `${guessedY.name} (${guessedY.score.toFixed(2)})` : 'non détecté';
-  els.guessInfo.textContent = `Détection automatique : X = ${xText} · Y = ${yText}`;
+//   els.guessInfo.textContent = `Détection automatique : X = ${xText} · Y = ${yText}`;
 }
 
 function parseWorkbook(fileName, workbook) {
@@ -182,32 +185,16 @@ function parseWorkbook(fileName, workbook) {
 }
 
 function setLoading(isLoading) {
-  if (!els.guessInfo) return;
-  
   if (isLoading) {
-    // Affiche le petit texte en haut à droite
-    els.guessInfo.innerHTML = `
-      <span class="loader">
-        <span class="loader-dot"></span>
-        <span class="loader-dot"></span>
-        <span class="loader-dot"></span>
-        <span>Analyse du fichier en cours…</span>
-      </span>
-    `;
-    
     // On vide le tableau précédent
     els.thead.innerHTML = '';
     els.tbody.innerHTML = '';
     
     // On affiche la roue crantée centrale
-    if(els.previewLoader) els.previewLoader.style.display = 'flex';
-    
+    if (els.previewLoader) els.previewLoader.style.display = 'flex';
   } else {
-    // Fin du chargement
-    els.guessInfo.textContent = 'Pas encore d’analyse.';
-    
-    // On cache la roue crantée
-    if(els.previewLoader) els.previewLoader.style.display = 'none';
+    // On cache la roue crantée à la fin du chargement
+    if (els.previewLoader) els.previewLoader.style.display = 'none';
   }
 }
 
@@ -269,7 +256,7 @@ async function inspectFile(file) {
     const guessedY = guessField(parsed.headers, 'y');
     const warnings = [];
     if (!parsed.headers.length) warnings.push('Aucune colonne détectée. Vérifiez le fichier source.');
-    if (parsed.rows.length === 0) warnings.push('Aucune ligne de données détectée.');
+    if (state.preview.length === 0) warnings.push('Aucune ligne de données détectée.');
 
     els.currentFile.textContent = parsed.fileName;
     els.baseName.value = parsed.fileName.replace(/\.[^.]+$/, '') + '_reproj';
@@ -280,7 +267,9 @@ async function inspectFile(file) {
     renderWarnings(warnings);
     renderTable(parsed.headers, state.preview);
     setFieldSelects(parsed.headers, guessedX, guessedY);
-    toast('Fichier analysé avec succès.', 'success'); // Mis en success plutôt que warn
+    
+    updateMap(); 
+    
   } catch (e) {
     toast(`Erreur d'analyse : ${String(e)}`, 'error');
   } finally {
@@ -543,3 +532,79 @@ async function processCSV_RAM(file) {
     }
   });
 }
+
+// --- INITIALISATION DE LA CARTE ---
+function initMap() {
+  // On centre la carte sur la France par défaut
+  map = L.map('leafletMap').setView([46.2276, 2.2137], 5);
+  
+  // Fond de carte clair et épuré (CARTO)
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+    attribution: '&copy; OpenStreetMap &copy; CARTO',
+    maxZoom: 19
+  }).addTo(map);
+}
+
+function updateMap() {
+  if (!map) return;
+  
+  // 1. On efface les anciens points
+  mapMarkers.forEach(m => map.removeLayer(m));
+  mapMarkers = [];
+
+  const xField = els.xField.value;
+  const yField = els.yField.value;
+  const epsgIn = els.epsgIn.value;
+
+  if (!xField || !yField || !epsgIn || state.preview.length === 0) return;
+
+  const bounds = L.latLngBounds();
+  let validPoints = 0;
+
+  // 2. On parcourt les 20 lignes de l'aperçu
+  state.preview.forEach(row => {
+    const x = normalizeNumber(row[xField]);
+    const y = normalizeNumber(row[yField]);
+
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      try {
+        // La carte a besoin de coordonnées GPS (WGS84 / EPSG:4326)
+        const [lng, lat] = proj4(epsgIn, 'EPSG:4326', [x, y]);
+        
+        if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90) {
+           // On dessine un cercle orange (#f97316) pour chaque point
+           const marker = L.circleMarker([lat, lng], {
+             radius: 6,
+             fillColor: '#f97316',
+             color: '#fff',
+             weight: 1,
+             opacity: 1,
+             fillOpacity: 0.8
+           }).addTo(map);
+           
+           // Infobulle au survol
+           marker.bindTooltip(`X: ${x}<br>Y: ${y}`);
+           
+           bounds.extend([lat, lng]);
+           mapMarkers.push(marker);
+           validPoints++;
+        }
+      } catch (e) {
+        // Point ignoré si la reprojection échoue
+      }
+    }
+  });
+
+ 
+  if (validPoints > 0) {
+    map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+  } else {
+    map.setView([46.2276, 2.2137], 5);
+  }
+}
+
+initMap();
+
+els.xField.addEventListener('change', updateMap);
+els.yField.addEventListener('change', updateMap);
+els.epsgIn.addEventListener('change', updateMap);
