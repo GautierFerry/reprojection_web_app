@@ -22,8 +22,6 @@ proj4.defs('EPSG:27572', '+proj=lcc +lat_0=46.8 +lon_0=0 +lat_1=45.8989188888889
 
 const byId = (id) => document.getElementById(id);
 const els = {
-  themeToggle: byId('themeToggle'),
-  pickFileBtn: byId('pickFileBtn'),
   fileInput: byId('fileInput'),
   runBtn: byId('runBtn'),
   dropzone: byId('dropzone'),
@@ -46,12 +44,6 @@ const els = {
   baseName: byId('baseName'),
   previewLoader: byId('previewLoader'),
 };
-
-const theme = { value: 'dark' };
-els.themeToggle?.addEventListener('click', () => {
-  theme.value = theme.value === 'dark' ? 'light' : 'dark';
-  document.documentElement.setAttribute('data-theme', theme.value);
-});
 
 function toast(message, kind = 'warn') {
   els.result.innerHTML = `<div class="alert ${kind}">${message}</div>`;
@@ -360,7 +352,7 @@ function exportFiles(rows) {
   return links;
 }
 
-els.pickFileBtn?.addEventListener('click', () => els.fileInput.click());
+els.dropzone?.addEventListener('click', () => els.fileInput.click());
 els.fileInput?.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
   if (file) {

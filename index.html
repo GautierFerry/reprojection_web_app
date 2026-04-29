@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Reprojection Web</title>
+  <title>RIProjection</title>
 
   <link rel="preconnect" href="https://api.fontshare.com">
   <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&f[]=cabinet-grotesk@500,700&display=swap" rel="stylesheet">
@@ -12,33 +12,16 @@
 </head>
 <body>
   <div class="app">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="logo" aria-hidden="true"></div>
-        <div><h2>Reprojection Web</h2></div>
-      </div>
-
-      <div><h3>Étapes</h3></div>
-      <div class="panel pad stack"><div class="muted">1. Importer un fichier CSV ou Excel contenant des coordonnées X/Y.</div></div>
-      <div class="panel pad stack"><div class="muted">2. Vérifier les champs détectés, choisir les EPSG source et cible.</div></div>
-      <div class="panel pad stack"><div class="muted">3. Lancer la transformation directement dans le navigateur.</div></div>
-      <div class="panel pad stack"><div class="muted">4. Télécharger les résultats au format CSV et/ou Excel.</div></div>
-    </aside>
-
     <main class="main">
       <!-- HERO : thème + bouton fichier -->
       <section class="hero">
         <div class="hero-copy stack">
-          <h1>Reprojection Web</h1>
+          <h1>RIProjection de coordonnées géographiques</h1>
           <div class="muted">
-            Les traitements sont réalisés côté client, sans backend.
+            La reprojection de coordonnées géographiques directement dans votre navigateur.
           </div>
         </div>
-        <div class="toolbar">
-          <button class="btn btn-secondary" id="themeToggle">Thème</button>
-          <button class="btn btn-primary" id="pickFileBtn">Choisir un fichier</button>
-          <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
-        </div>
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" hidden>
       </section>
 
       <!-- GRID : dropzone à gauche, options à droite -->
@@ -49,7 +32,7 @@
             <div class="pill">CSV, XLSX, XLS</div>
             <h2>Déposez un fichier ici</h2>
             <div class="muted">
-              Ou utilisez le bouton pour analyser le fichier et détecter automatiquement les champs reprojetables.
+              Ou cliquez ici pour importer un fichier.
             </div>
             <div id="currentFile" class="footer-note">Aucun fichier chargé.</div>
           </div>
