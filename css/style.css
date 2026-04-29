@@ -218,6 +218,13 @@ thead { background: var(--color-surface-2); position: sticky; top: 0; }
     animation: spin 1s ease-in-out infinite;
 }
 
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3); /* Espacement de 12px entre les deux boutons */
+    flex-wrap: wrap;     /* Les boutons passent à la ligne sur mobile */
+}
+
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 @media (max-width: 1080px) {
