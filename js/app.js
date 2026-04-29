@@ -220,40 +220,21 @@ function setLoading(isLoading) {
 
 function parseLargeCSV(file) {
   return new Promise((resolve, reject) => {
-    let headers = [];
-    let preview = [];
-    let allRows = [];
-    let rowCount = 0;
-
     Papa.parse(file, {
-      header: true,          // Transforme chaque ligne en objet
+      header: true,
       skipEmptyLines: true,
-      worker: true,          // MAGIQUE : Fait le travail en arrière-plan (ne fige pas la page)
-      step: function(results) {
-        // Cette fonction est appelée pour chaque ligne (ou bloc de lignes)
-        if (rowCount === 0) {
-          headers = results.meta.fields;
-        }
-        if (rowCount < 20) {
-          preview.push(results.data);
-        }
-        // On stocke la ligne
-        allRows.push(results.data);
-        rowCount++;
-      },
+      preview: 20,
       complete: function(results) {
         resolve({
           fileName: file.name,
-          rows: allRows,
-          headers: headers,
-          preview: preview,
+          rows: [],
+          headers: results.meta.fields,
+          preview: results.data,
           format: 'CSV',
-          delimiter: results.meta.delimiter || 'Auto'
+          delimiter: results.meta.delimiter || ';'
         });
       },
-      error: function(err) {
-        reject(err);
-      }
+      error: reject
     });
   });
 }
@@ -406,10 +387,16 @@ if (els.dropzone) {
   });
 }
 
-els.runBtn?.addEventListener('click', () => {
-  if (!state.rows.length) return toast('Importez un fichier avant de lancer la reprojection.', 'error');
-  if (!els.exportCsv.checked && !els.exportXlsx.checked) return toast('Sélectionnez au moins un format d’export.', 'error');
+els.runBtn?.addEventListener('click', async () => {
+  // Récupère le vrai fichier depuis l'input
+  const file = els.fileInput.files[0]; 
+  if (!file) return toast('Importez un fichier avant de lancer.', 'error');
 
+  // Si c'est un CSV, on utilise notre super fonction de Stream sur le disque
+  if (file.name.toLowerCase().endsWith('.csv')) {
+    await processHugeCSV(file);
+    return; // On arrête là
+  }
   try {
     const { outRows, rejected } = transformRows();
     const files = exportFiles(outRows);
@@ -438,3 +425,85 @@ els.runBtn?.addEventListener('click', () => {
 fillSelect(els.epsgIn, EPSG_OPTIONS, 'EPSG:4326');
 fillSelect(els.epsgOut, EPSG_OPTIONS, 'EPSG:2154');
 
+async function processHugeCSV(file) {
+  const xField = els.xField.value;
+  const yField = els.yField.value;
+  const epsgIn = els.epsgIn.value;
+  const epsgOut = els.epsgOut.value;
+  const joinXY = els.joinXY.checked;
+
+  try {
+    // 1. Demande à l'utilisateur où sauvegarder le nouveau fichier
+    const fileHandle = await window.showSaveFilePicker({
+      suggestedName: els.baseName.value + '.csv',
+      types: [{ description: 'Fichier CSV', accept: { 'text/csv': ['.csv'] } }],
+    });
+    
+    // 2. Ouvre un "tuyau" vers le disque dur de l'utilisateur
+    const writableStream = await fileHandle.createWritable();
+    
+    setLoading(true);
+    let processedCount = 0;
+    let isFirstChunk = true;
+
+    // 3. On relance Papa Parse sur le fichier entier, mais en mode "Stream"
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      chunk: async function(results, parser) {
+        // Met le lecteur en pause le temps d'écrire sur le disque
+        parser.pause(); 
+        
+        const outRows = [];
+        
+        // On reprojette ce petit paquet de lignes
+        for (const row of results.data) {
+          const x = normalizeNumber(row[xField]);
+          const y = normalizeNumber(row[yField]);
+          
+          if (Number.isFinite(x) && Number.isFinite(y)) {
+            try {
+              const [rx, ry] = proj4(epsgIn, epsgOut, [x, y]);
+              const out = { ...row, [`${xField}_${epsgOut}`]: rx, [`${yField}_${epsgOut}`]: ry };
+              if (joinXY) out.ND_Geom = `${rx},${ry}`;
+              outRows.push(out);
+            } catch (e) {
+              // Ligne ignorée en cas d'erreur mathématique
+            }
+          }
+        }
+
+        if (outRows.length > 0) {
+          // On reconvertit ce paquet en texte CSV
+          const csvText = Papa.unparse(outRows, { header: isFirstChunk });
+          // On injecte le texte directement sur le disque dur !
+          await writableStream.write(csvText + '\n');
+          
+          processedCount += outRows.length;
+          isFirstChunk = false;
+        }
+
+        // On reprend la lecture
+        parser.resume();
+      },
+      complete: async function() {
+        // 4. On ferme le tuyau proprement
+        await writableStream.close();
+        setLoading(false);
+        toast(`Succès ! ${processedCount} lignes traitées et écrites sur le disque.`, 'success');
+      },
+      error: async function(err) {
+        await writableStream.close();
+        setLoading(false);
+        toast(`Erreur pendant la lecture : ${err}`, 'error');
+      }
+    });
+
+  } catch (error) {
+    setLoading(false);
+    // L'erreur "AbortError" arrive si l'utilisateur annule la sélection du fichier de sauvegarde
+    if (error.name !== 'AbortError') {
+      toast(`Erreur système : ${error.message}`, 'error');
+    }
+  }
+}
