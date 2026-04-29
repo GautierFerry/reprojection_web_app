@@ -395,7 +395,7 @@ els.runBtn?.addEventListener('click', async () => {
   // Si c'est un CSV, on utilise notre super fonction de Stream sur le disque
   if (file.name.toLowerCase().endsWith('.csv')) {
     await processHugeCSV(file);
-    return; // On arrête là
+    return;
   }
   try {
     const { outRows, rejected } = transformRows();
@@ -433,30 +433,26 @@ async function processHugeCSV(file) {
   const joinXY = els.joinXY.checked;
 
   try {
-    // 1. Demande à l'utilisateur où sauvegarder le nouveau fichier
     const fileHandle = await window.showSaveFilePicker({
       suggestedName: els.baseName.value + '.csv',
       types: [{ description: 'Fichier CSV', accept: { 'text/csv': ['.csv'] } }],
     });
     
-    // 2. Ouvre un "tuyau" vers le disque dur de l'utilisateur
     const writableStream = await fileHandle.createWritable();
     
     setLoading(true);
     let processedCount = 0;
     let isFirstChunk = true;
 
-    // 3. On relance Papa Parse sur le fichier entier, mais en mode "Stream"
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
+      chunkSize: 1024 * 1024 * 2, 
       chunk: async function(results, parser) {
-        // Met le lecteur en pause le temps d'écrire sur le disque
         parser.pause(); 
         
         const outRows = [];
         
-        // On reprojette ce petit paquet de lignes
         for (const row of results.data) {
           const x = normalizeNumber(row[xField]);
           const y = normalizeNumber(row[yField]);
@@ -467,27 +463,22 @@ async function processHugeCSV(file) {
               const out = { ...row, [`${xField}_${epsgOut}`]: rx, [`${yField}_${epsgOut}`]: ry };
               if (joinXY) out.ND_Geom = `${rx},${ry}`;
               outRows.push(out);
-            } catch (e) {
-              // Ligne ignorée en cas d'erreur mathématique
-            }
+            } catch (e) { }
           }
         }
 
         if (outRows.length > 0) {
-          // On reconvertit ce paquet en texte CSV
           const csvText = Papa.unparse(outRows, { header: isFirstChunk });
-          // On injecte le texte directement sur le disque dur !
           await writableStream.write(csvText + '\n');
-          
           processedCount += outRows.length;
           isFirstChunk = false;
+          if (els.guessInfo) els.guessInfo.textContent = `Écriture sur le disque : ${processedCount} lignes...`;
         }
-
-        // On reprend la lecture
-        parser.resume();
+        setTimeout(() => {
+            parser.resume();
+        }, 10);
       },
       complete: async function() {
-        // 4. On ferme le tuyau proprement
         await writableStream.close();
         setLoading(false);
         toast(`Succès ! ${processedCount} lignes traitées et écrites sur le disque.`, 'success');
@@ -501,7 +492,6 @@ async function processHugeCSV(file) {
 
   } catch (error) {
     setLoading(false);
-    // L'erreur "AbortError" arrive si l'utilisateur annule la sélection du fichier de sauvegarde
     if (error.name !== 'AbortError') {
       toast(`Erreur système : ${error.message}`, 'error');
     }
