@@ -1,4 +1,5 @@
 const state = {
+  file: null,
   fileName: '',
   rows: [],
   headers: [],
@@ -362,7 +363,10 @@ function exportFiles(rows) {
 els.pickFileBtn?.addEventListener('click', () => els.fileInput.click());
 els.fileInput?.addEventListener('change', (e) => {
   const file = e.target.files?.[0];
-  if (file) inspectFile(file);
+  if (file) {
+    state.file = file; 
+    inspectFile(file);
+  }
 });
 
 // Drag & drop sécurisé
@@ -381,22 +385,37 @@ if (els.dropzone) {
     }),
   );
 
-  els.dropzone.addEventListener('drop', (e) => {
+    // Dans la zone de drag & drop :
+    els.dropzone.addEventListener('drop', (e) => {
     const file = e.dataTransfer?.files?.[0];
-    if (file) inspectFile(file);
-  });
+    if (file) {
+        state.file = file; 
+        inspectFile(file);
+    }
+    });
 }
 
 els.runBtn?.addEventListener('click', async () => {
-  // Récupère le vrai fichier depuis l'input
-  const file = els.fileInput.files[0]; 
+  const file = state.file; // On récupère le fichier sauvegardé
   if (!file) return toast('Importez un fichier avant de lancer.', 'error');
 
-  // Si c'est un CSV, on utilise notre super fonction de Stream sur le disque
+  // Sécurité anti-crash pour les fichiers Excel
+  if (!file.name.toLowerCase().endsWith('.csv') && file.size > 50 * 1024 * 1024) {
+    return toast('Ce fichier Excel est trop lourd pour le navigateur. Veuillez le convertir en CSV pour le traiter.', 'error');
+  }
+
+  // Si c'est un CSV, on lance le flux
   if (file.name.toLowerCase().endsWith('.csv')) {
+    if (!window.showSaveFilePicker) {
+      toast("L'écriture directe sur disque n'est pas supportée par votre navigateur (ou vous n'êtes pas en HTTPS). Le traitement va se faire en mémoire.", "warn");
+      await processCSV_RAM(file);
+      return;
+    }
     await processHugeCSV(file);
     return;
   }
+
+  // --- TRAITEMENT EXCEL NORMAL (pour les petits fichiers) ---
   try {
     const { outRows, rejected } = transformRows();
     const files = exportFiles(outRows);
@@ -407,12 +426,11 @@ els.runBtn?.addEventListener('click', async () => {
       <div class="stack downloads">
         <div class="alert warn">
           <strong>Traitement terminé.</strong><br>
-          Lignes traitées : ${outRows.length} · Lignes rejetées : ${rejected.length}<br>
-          EPSG source : <code>${els.epsgIn.value}</code> · EPSG cible : <code>${els.epsgOut.value}</code>
+          Lignes traitées : ${outRows.length} · Lignes rejetées : ${rejected.length}
         </div>
         <div class="panel pad stack">
-          <div>Exports déclenchés : ${files.map(escapeHtml).join(', ')}</div>
-          <div class="muted">Les fichiers ont été téléchargés dans votre navigateur.</div>
+          <div>Exports : ${files.map(escapeHtml).join(', ')}</div>
+          <div class="muted">Fichiers téléchargés dans votre navigateur.</div>
         </div>
         ${warnings}
       </div>
@@ -447,13 +465,14 @@ async function processHugeCSV(file) {
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
-      chunkSize: 1024 * 1024 * 2, 
+      chunkSize: 1024 * 1024, // Des blocs de 1Mo pour préserver la RAM
       chunk: async function(results, parser) {
         parser.pause(); 
         
         const outRows = [];
         
-        for (const row of results.data) {
+        for (let i = 0; i < results.data.length; i++) {
+          const row = results.data[i];
           const x = normalizeNumber(row[xField]);
           const y = normalizeNumber(row[yField]);
           
@@ -472,16 +491,21 @@ async function processHugeCSV(file) {
           await writableStream.write(csvText + '\n');
           processedCount += outRows.length;
           isFirstChunk = false;
-          if (els.guessInfo) els.guessInfo.textContent = `Écriture sur le disque : ${processedCount} lignes...`;
+          if (els.guessInfo) els.guessInfo.textContent = `Écriture : ${processedCount} lignes...`;
         }
+
+        // VITAL POUR ÉVITER LE CRASH : On force le vidage de la RAM
+        results.data = [];
+        outRows.length = 0;
+
         setTimeout(() => {
             parser.resume();
-        }, 10);
+        }, 20); // Délai augmenté pour laisser le Garbage Collector travailler
       },
       complete: async function() {
         await writableStream.close();
         setLoading(false);
-        toast(`Succès ! ${processedCount} lignes traitées et écrites sur le disque.`, 'success');
+        toast(`Succès ! ${processedCount} lignes traitées et écrites directement sur le disque.`, 'success');
       },
       error: async function(err) {
         await writableStream.close();
@@ -496,4 +520,34 @@ async function processHugeCSV(file) {
       toast(`Erreur système : ${error.message}`, 'error');
     }
   }
+}
+
+//  autre solution
+async function processCSV_RAM(file) {
+  setLoading(true);
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function(results) {
+      state.rows = results.data;
+      try {
+        const { outRows, rejected } = transformRows();
+        const files = exportFiles(outRows);
+        els.result.innerHTML = `
+          <div class="stack downloads">
+            <div class="alert warn">
+              <strong>Traitement CSV (Mémoire) terminé.</strong><br>
+              Lignes traitées : ${outRows.length}
+            </div>
+            <div class="panel pad stack">
+              <div>Exports : ${files.map(escapeHtml).join(', ')}</div>
+            </div>
+          </div>`;
+      } catch (e) {
+        toast(`Erreur : ${e}`, 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  });
 }
