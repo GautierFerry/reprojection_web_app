@@ -16,12 +16,18 @@ const EPSG_OPTIONS = [
   { code: 'EPSG:32631', label: 'EPSG:32631 — WGS 84 / UTM zone 31N' },
   { code: 'EPSG:32632', label: 'EPSG:32632 — WGS 84 / UTM zone 32N' },
   { code: 'EPSG:27572', label: 'EPSG:27572 — NTF / Lambert zone II étendu' },
+  { code: 'EPSG:2972', label: 'EPSG:2972 — RGFG95 / UTM zone 22N — Guyane' },
+  { code: 'EPSG:2975', label: 'EPSG:2975 — RGR92 / UTM zone 40S — La Réunion' },
+  { code: 'EPSG:32620', label: 'EPSG:32620 — WGS 84 / UTM zone 20N — Antilles' },
 ];
 
 proj4.defs('EPSG:2154', '+proj=lcc +lat_0=46.5 +lon_0=3 +lat_1=49 +lat_2=44 +x_0=700000 +y_0=6600000 +ellps=GRS80 +units=m +no_defs +type=crs');
 proj4.defs('EPSG:32631', '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs +type=crs');
 proj4.defs('EPSG:32632', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +type=crs');
 proj4.defs('EPSG:27572', '+proj=lcc +lat_0=46.8 +lon_0=0 +lat_1=45.8989188888889 +lat_2=47.6960144444444 +x_0=600000 +y_0=2200000 +ellps=clrk80ign +pm=paris +units=m +no_defs +type=crs');
+proj4.defs('EPSG:2972','+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0 +units=m +no_defs +type=crs');
+proj4.defs('EPSG:2975','+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0 +units=m +no_defs +type=crs');
+proj4.defs('EPSG:32620','+proj=utm +zone=20 +datum=WGS84 +units=m +no_defs +type=crs');
 
 const byId = (id) => document.getElementById(id);
 const els = {
@@ -539,8 +545,8 @@ function initMap() {
   map = L.map('leafletMap').setView([46.2276, 2.2137], 5);
   
   // Fond de carte clair et épuré (CARTO)
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap &copy; CARTO',
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19
   }).addTo(map);
 }
