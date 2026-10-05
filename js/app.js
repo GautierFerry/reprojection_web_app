@@ -107,74 +107,484 @@ function normalizeNumber(value) {
   const s = String(value ?? '').trim();
   if (!s) return NaN;
   if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s);
-  if (/^-?\d+(,\d+)?$/.test(s)) return Number(s.replace(',', '.'));
+  if (/^-?\d+(\.\d+)?$/.test(s)) return Number(s.replace(',', '.'));
   if (/^-?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?$/.test(s)) {
     return Number(s.replace(/[ .](?=\d{3}(\D|$))/g, '').replace(',', '.'));
   }
   return Number(s.replace(',', '.'));
 }
 
-function guessField(headers, mode) {
-  // 1. Fonction utilitaire pour enlever les accents et mettre en minuscules
-  const normalize = (str) => {
-    return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+function normalizeText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isNumeric(value) {
+  return Number.isFinite(normalizeNumber(value));
+}
+
+function numericRatio(rows, field) {
+  if (!rows?.length) return 0;
+
+  let valid = 0;
+  let total = 0;
+
+  for (const row of rows) {
+    const value = row[field];
+
+    if (value === null || value === undefined || String(value).trim() === '') {
+      continue;
+    }
+
+    total++;
+
+    if (isNumeric(value)) {
+      valid++;
+    }
+  }
+
+  return total ? valid / total : 0;
+}
+
+function guessCoordinateFields(headers, rows = []) {
+
+  const rules = {
+
+    x: [
+      { regex: /^(x|coordx|coord_x|xcoord|x_coord)$/i, score: 1.00 },
+      { regex: /^(lon|longitude|lng)$/i, score: 0.98 },
+      { regex: /^(easting|est|east)$/i, score: 0.95 },
+
+      { regex: /(^|[_\s-])(x|lon|longitude|lng)([_\s-]|$)/i, score: 0.90 },
+
+      { regex: /(coord|coordonnee|coordinate).*x/i, score: 0.88 },
+      { regex: /x.*(coord|coordonnee|coordinate)/i, score: 0.88 },
+
+      { regex: /(x_l93|x_wgs84|x_gps|x_utm)/i, score: 0.85 },
+
+      { regex: /(^|[_\s-])x([_\s-]|$)/i, score: 0.75 }
+    ],
+
+    y: [
+      { regex: /^(y|coordy|coord_y|ycoord|y_coord)$/i, score: 1.00 },
+      { regex: /^(lat|latitude)$/i, score: 0.98 },
+      { regex: /^(northing|nord|north)$/i, score: 0.95 },
+
+      { regex: /(^|[_\s-])(y|lat|latitude)([_\s-]|$)/i, score: 0.90 },
+
+      { regex: /(coord|coordonnee|coordinate).*y/i, score: 0.88 },
+      { regex: /y.*(coord|coordonnee|coordinate)/i, score: 0.88 },
+
+      { regex: /(y_l93|y_wgs84|y_gps|y_utm)/i, score: 0.85 },
+
+      { regex: /(^|[_\s-])y([_\s-]|$)/i, score: 0.75 }
+    ]
   };
 
-  // 2. Définition des règles avec un score associé (du plus précis au plus large)
-  const rules = mode === 'x' ? [
-    { regex: /^(x|lon|longitude|lng|est|easting)$/, score: 1.0 },       
-    { regex: /^(_x|x_|-x|x-)|(_x$|-x$)/, score: 0.9 },                   
-    { regex: /\b(lon|longitude|lng|easting)\b/, score: 0.8 },            
-    { regex: /x/i, score: 0.4 },                                         
-  ] : [
-    { regex: /^(y|lat|latitude|nord|northing)$/, score: 1.0 },
-    { regex: /^(_y|y_|-y|y-)|(_y$|-y$)/, score: 0.9 },
-    { regex: /\b(lat|latitude|northing)\b/, score: 0.8 },
-    { regex: /y/i, score: 0.4 },
-  ];
+  function scoreField(field, mode) {
 
-  let bestMatch = null;
-  let highestScore = -1;
+    const normalized = normalizeText(field);
 
-  // 3. On teste chaque en-tête
-  for (const header of headers) {
-    const normalizedHeader = normalize(header);
+    let bestScore = 0;
 
-    for (const rule of rules) {
-      if (rule.regex.test(normalizedHeader)) {
-        // On pénalise légèrement les noms de colonnes très longs pour éviter les faux positifs
-        // ex: on préfère "X" (score 1.0) à "Coordonnee_X_du_batiment" (score 0.9 - pénalité)
-        const lengthPenalty = normalizedHeader.length > 15 ? 0.05 : 0;
-        const finalScore = rule.score - lengthPenalty;
+    for (const rule of rules[mode]) {
+      if (rule.regex.test(normalized)) {
+        bestScore = Math.max(bestScore, rule.score);
+      }
+    }
 
-        if (finalScore > highestScore) {
-          highestScore = finalScore;
-          bestMatch = { name: header, score: finalScore };
-        }
-        break; // On a trouvé la meilleure règle pour cette colonne, on passe à la suivante
+    const numeric = numericRatio(rows, field);
+    if (numeric >= 0.95) {
+      bestScore += 0.20;
+    } else if (numeric >= 0.70) {
+      bestScore += 0.10;
+    } else if (numeric < 0.30) {
+      bestScore -= 0.30;
+    }
+    if (normalized.length > 30) {
+      bestScore -= 0.05;
+    }
+
+    return bestScore;
+  }
+
+  const xCandidates = headers
+    .map(field => ({
+      name: field,
+      score: scoreField(field, 'x')
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const yCandidates = headers
+    .map(field => ({
+      name: field,
+      score: scoreField(field, 'y')
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  // On cherche la meilleure combinaison X/Y
+  let bestPair = null;
+
+  for (const x of xCandidates.slice(0, 10)) {
+    for (const y of yCandidates.slice(0, 10)) {
+
+      // X et Y doivent être deux colonnes différentes
+      if (x.name === y.name) continue;
+
+      const score = x.score + y.score;
+
+      if (!bestPair || score > bestPair.score) {
+        bestPair = {
+          x,
+          y,
+          score
+        };
       }
     }
   }
 
-  // 4. Si on a trouvé un match acceptable (score > 0.5 pour éviter les faux positifs ridicules)
-  if (bestMatch && bestMatch.score >= 0.5) {
-    return bestMatch;
+  // Fallback
+  if (!bestPair) {
+    return {
+      x: headers[0]
+        ? { name: headers[0], score: 0.20 }
+        : null,
+
+      y: headers[1]
+        ? { name: headers[1], score: 0.20 }
+        : null
+    };
   }
 
-  // 5. Fallback par défaut si rien n'est trouvé
-  const defaultIndex = mode === 'x' ? 0 : 1;
-  return headers[defaultIndex] 
-    ? { name: headers[defaultIndex], score: 0.35 } 
-    : null;
+  return {
+    x: bestPair.x,
+    y: bestPair.y
+  };
+}
+
+// ======================================================
+// DÉTECTION AUTOMATIQUE DE L'EPSG
+// ======================================================
+
+const EPSG_DETECTION_RULES = [
+
+  // EPSG explicite
+  {
+    epsg: 'EPSG:2972',
+    patterns: [
+      /epsg[\s:_-]*2972/i,
+      /rgfg95/i,
+      /rgfg95.*22/i,
+      /utm.*22n/i,
+      /guyane/i,
+      /guyana/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:2975',
+    patterns: [
+      /epsg[\s:_-]*2975/i,
+      /rgr92/i,
+      /rgr92.*40/i,
+      /utm.*40s/i,
+      /reunion/i,
+      /la reunion/i,
+      /réunion/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:32620',
+    patterns: [
+      /epsg[\s:_-]*32620/i,
+      /wgs84.*20/i,
+      /wgs.*84.*20/i,
+      /utm.*20n/i,
+      /utm20/i,
+      /antilles/i,
+      /martinique/i,
+      /guadeloupe/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:2154',
+    patterns: [
+      /epsg[\s:_-]*2154/i,
+      /lambert[\s_-]*93/i,
+      /lambert93/i,
+      /rgf93/i,
+      /l93/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:4326',
+    patterns: [
+      /epsg[\s:_-]*4326/i,
+      /wgs[\s_-]*84/i,
+      /wgs84/i,
+      /gps/i,
+      /latitude/i,
+      /longitude/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:3857',
+    patterns: [
+      /epsg[\s:_-]*3857/i,
+      /web[\s_-]*mercator/i,
+      /mercator/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:32631',
+    patterns: [
+      /epsg[\s:_-]*32631/i,
+      /utm[\s_-]*31n/i,
+      /utm31/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:32632',
+    patterns: [
+      /epsg[\s:_-]*32632/i,
+      /utm[\s_-]*32n/i,
+      /utm32/i
+    ],
+    score: 100
+  },
+
+  {
+    epsg: 'EPSG:27572',
+    patterns: [
+      /epsg[\s:_-]*27572/i,
+      /lambert.*ii/i,
+      /lambert.*2/i,
+      /ntf/i
+    ],
+    score: 100
+  }
+];
+
+function detectEPSG(fileName, headers, rows, xField, yField) {
+
+  const candidates = [];
+
+  // --------------------------------------------------
+  // 1. Recherche textuelle
+  // --------------------------------------------------
+
+  const textSources = [
+    fileName,
+    ...headers
+  ];
+
+  // On ajoute également les valeurs des premières lignes
+  for (const row of rows.slice(0, 20)) {
+
+    for (const value of Object.values(row)) {
+
+      if (
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== ''
+      ) {
+        textSources.push(String(value));
+      }
+    }
+  }
+
+  const fullText = textSources.join(' | ');
+
+  for (const rule of EPSG_DETECTION_RULES) {
+
+    let matches = 0;
+
+    for (const pattern of rule.patterns) {
+      if (pattern.test(fullText)) {
+        matches++;
+      }
+    }
+
+    if (matches > 0) {
+      candidates.push({
+        epsg: rule.epsg,
+        score: rule.score + matches * 5,
+        reason: 'information trouvée dans le fichier'
+      });
+    }
+  }
+
+  // --------------------------------------------------
+  // 2. Recherche par coordonnées
+  // --------------------------------------------------
+
+  if (xField && yField && rows.length) {
+
+    const coordinates = rows
+      .map(row => ({
+        x: normalizeNumber(row[xField]),
+        y: normalizeNumber(row[yField])
+      }))
+      .filter(p =>
+        Number.isFinite(p.x) &&
+        Number.isFinite(p.y)
+      );
+
+    if (coordinates.length) {
+
+      const avgX =
+        coordinates.reduce((sum, p) => sum + p.x, 0)
+        / coordinates.length;
+
+      const avgY =
+        coordinates.reduce((sum, p) => sum + p.y, 0)
+        / coordinates.length;
+
+      // WGS84
+      if (
+        Math.abs(avgX) <= 180 &&
+        Math.abs(avgY) <= 90
+      ) {
+        candidates.push({
+          epsg: 'EPSG:4326',
+          score: 70,
+          reason: 'plage de coordonnées compatible WGS84'
+        });
+      }
+
+      // Web Mercator
+      else if (
+        Math.abs(avgX) > 1000000 &&
+        Math.abs(avgY) > 1000000
+      ) {
+        candidates.push({
+          epsg: 'EPSG:3857',
+          score: 50,
+          reason: 'plage de coordonnées compatible Web Mercator'
+        });
+      }
+
+      // Guyane — RGFG95 / UTM 22N
+      else if (
+        avgX >= 100000 &&
+        avgX <= 900000 &&
+        avgY >= 0 &&
+        avgY <= 2000000
+      ) {
+        candidates.push({
+          epsg: 'EPSG:2972',
+          score: 60,
+          reason: 'plage de coordonnées compatible Guyane'
+        });
+      }
+
+      // Réunion — RGR92 / UTM 40S
+      else if (
+        avgX >= 200000 &&
+        avgX <= 500000 &&
+        avgY >= 7000000 &&
+        avgY <= 8000000
+      ) {
+        candidates.push({
+          epsg: 'EPSG:2975',
+          score: 60,
+          reason: 'plage de coordonnées compatible Réunion'
+        });
+      }
+
+      // Antilles — WGS84 / UTM 20N
+      else if (
+        avgX >= 100000 &&
+        avgX <= 900000 &&
+        avgY >= 1000000 &&
+        avgY <= 2500000
+      ) {
+        candidates.push({
+          epsg: 'EPSG:32620',
+          score: 60,
+          reason: 'plage de coordonnées compatible UTM 20N'
+        });
+      }
+
+      // Lambert 93
+      else if (
+        avgX >= 0 &&
+        avgX <= 1300000 &&
+        avgY >= 6000000 &&
+        avgY <= 7200000
+      ) {
+        candidates.push({
+          epsg: 'EPSG:2154',
+          score: 60,
+          reason: 'plage de coordonnées compatible Lambert-93'
+        });
+      }
+    }
+  }
+
+  // --------------------------------------------------
+  // 3. On choisit le meilleur candidat
+  // --------------------------------------------------
+
+  if (!candidates.length) {
+    return {
+      epsg: 'EPSG:4326',
+      score: 0,
+      reason: 'Aucune information suffisante'
+    };
+  }
+
+  candidates.sort((a, b) => b.score - a.score);
+
+  return candidates[0];
 }
 
 function setFieldSelects(headers, guessedX, guessedY) {
-  const options = headers.map((h) => ({ value: h, label: h }));
-  fillSelect(els.xField, options, guessedX?.name || headers[0]);
-  fillSelect(els.yField, options, guessedY?.name || headers[1] || headers[0]);
-  const xText = guessedX ? `${guessedX.name} (${guessedX.score.toFixed(2)})` : 'non détecté';
-  const yText = guessedY ? `${guessedY.name} (${guessedY.score.toFixed(2)})` : 'non détecté';
-//   els.guessInfo.textContent = `Détection automatique : X = ${xText} · Y = ${yText}`;
+  const options = headers.map(h => ({
+    value: h,
+    label: h
+  }));
+
+  fillSelect(
+    els.xField,
+    options,
+    guessedX?.name || headers[0]
+  );
+
+  fillSelect(
+    els.yField,
+    options,
+    guessedY?.name || headers[1] || headers[0]
+  );
+
+  const xText = guessedX
+    ? `${guessedX.name} (${guessedX.score.toFixed(2)})`
+    : 'non détecté';
+
+  const yText = guessedY
+    ? `${guessedY.name} (${guessedY.score.toFixed(2)})`
+    : 'non détecté';
+
+  if (els.guessInfo) {
+    els.guessInfo.textContent =
+      `X : ${xText} · Y : ${yText}`;
+  }
 }
 
 function parseWorkbook(fileName, workbook) {
@@ -258,8 +668,21 @@ async function inspectFile(file) {
     // On génère le preview seulement si la fonction de parsing ne l'a pas déjà fait
     state.preview = parsed.preview || parsed.rows.slice(0, 20);
 
-    const guessedX = guessField(parsed.headers, 'x');
-    const guessedY = guessField(parsed.headers, 'y');
+    const coordinateGuess = guessCoordinateFields(
+      parsed.headers,
+      state.preview
+    );
+
+    const guessedX = coordinateGuess.x;
+    const guessedY = coordinateGuess.y;
+
+    const detectedEPSG = detectEPSG(
+      parsed.fileName,
+      parsed.headers,
+      state.preview,
+      guessedX?.name,
+      guessedY?.name
+    );
     const warnings = [];
     if (!parsed.headers.length) warnings.push('Aucune colonne détectée. Vérifiez le fichier source.');
     if (state.preview.length === 0) warnings.push('Aucune ligne de données détectée.');
@@ -273,6 +696,7 @@ async function inspectFile(file) {
     renderWarnings(warnings);
     renderTable(parsed.headers, state.preview);
     setFieldSelects(parsed.headers, guessedX, guessedY);
+    fillSelect(els.epsgIn,EPSG_OPTIONS,detectedEPSG.epsg);
     
     updateMap(); 
     
