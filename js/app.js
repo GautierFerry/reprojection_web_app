@@ -693,12 +693,18 @@ async function inspectFile(file) {
     els.kpiRows.textContent = state.rows.length; // Afficher le total de lignes est plus pertinent !
     els.kpiDelim.textContent = parsed.delimiter;
 
-    renderWarnings(warnings);
     renderTable(parsed.headers, state.preview);
     setFieldSelects(parsed.headers, guessedX, guessedY);
-    fillSelect(els.epsgIn,EPSG_OPTIONS,detectedEPSG.epsg);
-    
-    updateMap(); 
+    fillSelect(els.epsgIn, EPSG_OPTIONS, detectedEPSG.epsg);
+
+    // Laisser le DOM terminer son rendu avant de recalculer la taille Leaflet
+    requestAnimationFrame(() => {
+      if (map) {
+        map.invalidateSize({ pan: false });
+      }
+
+      updateMap();
+    });
     
   } catch (e) {
     toast(`Erreur d'analyse : ${String(e)}`, 'error');
@@ -1010,20 +1016,25 @@ async function processCSV_RAM(file) {
 
 // --- INITIALISATION DE LA CARTE ---
 function initMap() {
-  // On centre la carte sur la France par défaut
   map = L.map('leafletMap').setView([46.2276, 2.2137], 5);
-  
-  // Fond de carte clair et épuré (CARTO)
+
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19
   }).addTo(map);
+
+  // Important : le conteneur peut ne pas avoir sa taille finale
+  // au moment de l'initialisation de Leaflet.
+  setTimeout(() => {
+    map.invalidateSize();
+  }, 300);
 }
 
 function updateMap() {
   if (!map) return;
-  
-  // 1. On efface les anciens points
+
+  map.invalidateSize({ pan: false });
+
   mapMarkers.forEach(m => map.removeLayer(m));
   mapMarkers = [];
 
@@ -1079,6 +1090,12 @@ function updateMap() {
 }
 
 initMap();
+
+window.addEventListener('resize', () => {
+  if (map) {
+    map.invalidateSize({ pan: false });
+  }
+});
 
 els.xField.addEventListener('change', updateMap);
 els.yField.addEventListener('change', updateMap);
