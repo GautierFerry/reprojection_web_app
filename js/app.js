@@ -25,9 +25,9 @@ proj4.defs('EPSG:2154', '+proj=lcc +lat_0=46.5 +lon_0=3 +lat_1=49 +lat_2=44 +x_0
 proj4.defs('EPSG:32631', '+proj=utm +zone=31 +datum=WGS84 +units=m +no_defs +type=crs');
 proj4.defs('EPSG:32632', '+proj=utm +zone=32 +datum=WGS84 +units=m +no_defs +type=crs');
 proj4.defs('EPSG:27572', '+proj=lcc +lat_0=46.8 +lon_0=0 +lat_1=45.8989188888889 +lat_2=47.6960144444444 +x_0=600000 +y_0=2200000 +ellps=clrk80ign +pm=paris +units=m +no_defs +type=crs');
-proj4.defs('EPSG:2972','+proj=utm +zone=22 +ellps=GRS80 +towgs84=0,0,0,0,0,0 +units=m +no_defs +type=crs');
-proj4.defs('EPSG:2975','+proj=utm +zone=40 +south +ellps=GRS80 +towgs84=0,0,0,0,0,0 +units=m +no_defs +type=crs');
-proj4.defs('EPSG:32620','+proj=utm +zone=20 +datum=WGS84 +units=m +no_defs +type=crs');
+proj4.defs('EPSG:2972',' +proj=utm +zone=22 +ellps=GRS80 ' + '+towgs84=0,0,0,0,0,0,0 ' + '+units=m +no_defs +type=crs');
+proj4.defs('EPSG:2975', '+proj=utm +zone=40 +south +ellps=GRS80 ' + '+towgs84=-789.99,627.333,89.685,-0.6072,-76.8019,10.568,32.2083 ' + '+units=m +no_defs +type=crs');
+proj4.defs('EPSG:32620', '+proj=utm +zone=20 +datum=WGS84 ' + '+units=m +no_defs +type=crs');
 
 const byId = (id) => document.getElementById(id);
 const els = {
@@ -294,11 +294,21 @@ function downloadBlob(blob, fileName) {
 }
 
 function transformRows() {
+
   const xField = els.xField.value;
   const yField = els.yField.value;
   const epsgIn = els.epsgIn.value;
   const epsgOut = els.epsgOut.value;
   const joinXY = els.joinXY.checked;
+
+  console.log('==============================');
+  console.log('REPROJECTION');
+  console.log('X :', xField);
+  console.log('Y :', yField);
+  console.log('EPSG source :', epsgIn);
+  console.log('EPSG cible :', epsgOut);
+  console.log('ND :', joinXY);
+  console.log('==============================');
 
   const outRows = [];
   const rejected = [];
@@ -310,14 +320,29 @@ function transformRows() {
       rejected.push(row);
       continue;
     }
-    try {
-      const [rx, ry] = proj4(epsgIn, epsgOut, [x, y]);
-      const out = { ...row, [`${xField}_${epsgOut}`]: rx, [`${yField}_${epsgOut}`]: ry };
-      if (joinXY) out.ND_Geom = `${rx},${ry}`;
-      outRows.push(out);
-    } catch {
-      rejected.push(row);
+  try {
+
+    const [rx, ry] = proj4(epsgIn, epsgOut, [x, y]);
+    if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
+      throw new Error(
+        `Résultat invalide : ${rx}, ${ry}`
+      );
     }
+    const out = {
+      ...row,
+      [`${xField}_${epsgOut}`]: rx,
+      [`${yField}_${epsgOut}`]: ry
+    };
+
+    if (joinXY) {
+      out.ND_Geom = `${rx},${ry}`;
+    }
+    outRows.push(out);
+  } catch (e) {
+    console.error(
+      'Erreur reprojection :',
+      {epsgIn, epsgOut, x, y, erreur: e});
+    rejected.push(row);}
   }
   return { outRows, rejected };
 }
@@ -464,12 +489,32 @@ async function processHugeCSV(file) {
           const y = normalizeNumber(row[yField]);
           
           if (Number.isFinite(x) && Number.isFinite(y)) {
-            try {
-              const [rx, ry] = proj4(epsgIn, epsgOut, [x, y]);
-              const out = { ...row, [`${xField}_${epsgOut}`]: rx, [`${yField}_${epsgOut}`]: ry };
-              if (joinXY) out.ND_Geom = `${rx},${ry}`;
-              outRows.push(out);
-            } catch (e) { }
+           try {
+            const [rx, ry] = proj4(
+              epsgIn,
+              epsgOut,
+              [x, y]
+            );
+            if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
+              throw new Error(
+                `Coordonnées de sortie invalides : ${rx}, ${ry}`
+              );
+            }
+            const out = {
+              ...row,
+              [`${xField}_${epsgOut}`]: rx,
+              [`${yField}_${epsgOut}`]: ry
+            };
+
+            if (joinXY) {
+              out.ND_Geom = `${rx},${ry}`;}
+            outRows.push(out);
+          } catch (e) {
+            console.error(
+              'Erreur reprojection CSV :',
+              {epsgIn, epsgOut, x, y, erreur: e.message }
+            );
+          }
           }
         }
 
